@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../db/database_helper.dart';
+import '../main.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
-
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
@@ -23,73 +22,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final user = await db.getUser();
+    final user  = await db.getUser();
     final spent = await db.getTotalSpentSinceGoalStart();
-    if (mounted) {
-      setState(() {
-        _user = user;
-        _goalSpent = spent;
-        _loading = false;
-      });
-    }
+    if (mounted) setState(() { _user = user; _goalSpent = spent; _loading = false; });
   }
 
-  // ─── Edit name ───────────────────────────────────────────
   void _editName() {
     final ctrl = TextEditingController(text: _user?['name']);
-    showDialog(
-      context: context,
-      builder: (_) => _inputDialog(
-        title: 'Your name',
-        controller: ctrl,
-        keyboardType: TextInputType.name,
-        onSave: () async {
-          if (ctrl.text.trim().isEmpty) return;
-          await db.updateUser({'name': ctrl.text.trim()});
-          Navigator.pop(context);
-          _load();
-        },
-      ),
+    _showInputDialog(
+      title: 'Your name',
+      controller: ctrl,
+      keyboardType: TextInputType.name,
+      onSave: () async {
+        if (ctrl.text.trim().isEmpty) return;
+        await db.updateUser({'name': ctrl.text.trim()});
+        Navigator.pop(context);
+        _load();
+      },
     );
   }
 
-  // ─── Edit daily budget ───────────────────────────────────
   void _editDailyBudget() {
     final ctrl = TextEditingController(
         text: (_user?['daily_budget'] as num?)?.toStringAsFixed(0));
-    showDialog(
-      context: context,
-      builder: (_) => _inputDialog(
-        title: 'Daily budget (₹)',
-        controller: ctrl,
-        keyboardType: TextInputType.number,
-        hint: 'Applies from tomorrow',
-        onSave: () async {
-          final val = double.tryParse(ctrl.text);
-          if (val == null || val <= 0) return;
-          await db.updateUser({'daily_budget': val});
-          Navigator.pop(context);
-          _load();
-        },
-      ),
+    _showInputDialog(
+      title: 'Daily budget (₹)',
+      controller: ctrl,
+      keyboardType: TextInputType.number,
+      hint: 'Applies from tomorrow',
+      onSave: () async {
+        final val = double.tryParse(ctrl.text);
+        if (val == null || val <= 0) return;
+        await db.updateUser({'daily_budget': val});
+        Navigator.pop(context);
+        _load();
+      },
     );
   }
 
-  // ─── Add pocket money ────────────────────────────────────
   void _addPocketMoney() {
-    final amtCtrl = TextEditingController();
+    final amtCtrl  = TextEditingController();
     final noteCtrl = TextEditingController();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => Padding(
-        padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: const BoxDecoration(
-            color: Color(0xFF1A1A24),
+            color: AppColors.card,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
@@ -98,34 +81,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               const Text('Add money',
                   style: TextStyle(
-                      color: Color(0xFFDDDDEE),
+                      color: AppColors.textPrimary,
                       fontSize: 20,
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 20),
-              _darkField(amtCtrl, 'Amount (₹)',
-                  keyboardType: TextInputType.number),
+              _field(amtCtrl, 'Amount (₹)', keyboardType: TextInputType.number),
               const SizedBox(height: 12),
-              _darkField(noteCtrl, 'Note (optional)'),
+              _field(noteCtrl, 'Note (optional)'),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2ECC71),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
+                      backgroundColor: AppColors.success),
                   onPressed: () async {
                     final amount = double.tryParse(amtCtrl.text);
                     if (amount == null || amount <= 0) return;
                     final note = noteCtrl.text.trim().isEmpty
                         ? 'Income'
                         : noteCtrl.text.trim();
-
-                    // Get or create today entry for FK
                     final today = await db.getOrCreateToday();
-
                     await db.insertTransaction({
                       'daily_budget_id': today['id'],
                       'type': 'income',
@@ -135,14 +110,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'created_at': DateTime.now().toIso8601String(),
                     });
                     await db.addToBalance(amount);
-                    Navigator.pop(context);
+                    if (mounted) Navigator.pop(context);
                     _load();
                   },
-                  child: const Text('Save',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700)),
+                  child: const Text('Save'),
                 ),
               ),
             ],
@@ -152,33 +123,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ─── Reset savings ───────────────────────────────────────
   void _resetSavings() {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A24),
+        backgroundColor: AppColors.card,
         title: const Text('Reset savings?',
-            style: TextStyle(color: Color(0xFFDDDDEE))),
+            style: TextStyle(color: AppColors.textPrimary)),
         content: const Text(
             'This sets your savings back to ₹0. This cannot be undone.',
-            style: TextStyle(color: Color(0xFF8A8A9A))),
+            style: TextStyle(color: AppColors.muted)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(color: Color(0xFF5A5A6A))),
-          ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppColors.muted))),
           TextButton(
-            onPressed: () async {
-              await db.resetSavings();
-              Navigator.pop(context);
-              _load();
-            },
-            child: const Text('Reset',
-                style: TextStyle(
-                    color: Color(0xFFE74C3C), fontWeight: FontWeight.w700)),
-          ),
+              onPressed: () async {
+                await db.resetSavings();
+                Navigator.pop(context);
+                _load();
+              },
+              child: const Text('Reset',
+                  style: TextStyle(
+                      color: AppColors.accent, fontWeight: FontWeight.w700))),
         ],
       ),
     );
@@ -188,21 +156,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        backgroundColor: Color(0xFF0F0F14),
-        body: Center(
-            child: CircularProgressIndicator(color: Color(0xFF7C6FFF))),
+        backgroundColor: AppColors.bg,
+        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
       );
     }
 
-    final name = _user?['name'] ?? '';
-    final balance = (_user?['current_balance'] as num?)?.toDouble() ?? 0;
-    final savings = (_user?['savings'] as num?)?.toDouble() ?? 0;
-    final dailyBudget = (_user?['daily_budget'] as num?)?.toDouble() ?? 200;
-    final goalAmount = (_user?['goal_amount'] as num?)?.toDouble();
-    final goalDays = (_user?['goal_days'] as num?)?.toInt();
+    final name         = _user?['name'] ?? '';
+    final balance      = (_user?['current_balance'] as num?)?.toDouble() ?? 0;
+    final savings      = (_user?['savings'] as num?)?.toDouble() ?? 0;
+    final dailyBudget  = (_user?['daily_budget'] as num?)?.toDouble() ?? 200;
+    final goalAmount   = (_user?['goal_amount'] as num?)?.toDouble();
+    final goalDays     = (_user?['goal_days'] as num?)?.toInt();
     final goalStartDate = _user?['goal_start_date'] as String?;
 
-    // How many days into goal
     int? dayInGoal;
     if (goalStartDate != null) {
       final start = DateTime.parse(goalStartDate);
@@ -211,14 +177,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F14),
+      backgroundColor: AppColors.bg,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ─── Avatar + name ──────────────────────────
+              // ─── Avatar + name ────────────────────────────
               Row(
                 children: [
                   Container(
@@ -226,15 +192,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     height: 60,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFF1E1E2A),
-                      border: Border.all(
-                          color: const Color(0xFF7C6FFF), width: 2),
+                      color: AppColors.secondary.withOpacity(0.35),
+                      border: Border.all(color: AppColors.primary, width: 2.5),
                     ),
                     child: Center(
                       child: Text(
                         name.isNotEmpty ? name[0].toUpperCase() : '?',
                         style: const TextStyle(
-                            color: Color(0xFF7C6FFF),
+                            color: AppColors.primary,
                             fontSize: 26,
                             fontWeight: FontWeight.bold),
                       ),
@@ -245,18 +210,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          name,
-                          style: const TextStyle(
-                              color: Color(0xFFDDDDEE),
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800),
-                        ),
-                        Text(
-                          'Daily budget  ₹${dailyBudget.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                              color: Color(0xFF5A5A6A), fontSize: 13),
-                        ),
+                        Text(name,
+                            style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800),
+                            overflow: TextOverflow.ellipsis),
+                        Text('Daily budget  ₹${dailyBudget.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                                color: AppColors.muted, fontSize: 13)),
                       ],
                     ),
                   ),
@@ -265,29 +227,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 28),
 
-              // ─── Settings cards ──────────────────────────
+              // ─── Settings ─────────────────────────────────
               _sectionLabel('SETTINGS'),
               const SizedBox(height: 10),
               _settingRow('Name', name, _editName),
               const SizedBox(height: 8),
-              _settingRow(
-                'Daily budget',
-                '₹${dailyBudget.toStringAsFixed(0)}',
-                _editDailyBudget,
-                subtitle: 'Changes apply from tomorrow',
-              ),
+              _settingRow('Daily budget', '₹${dailyBudget.toStringAsFixed(0)}',
+                  _editDailyBudget, subtitle: 'Changes apply from tomorrow'),
 
               const SizedBox(height: 28),
 
-              // ─── Account balance ─────────────────────────
+              // ─── Account ──────────────────────────────────
               _sectionLabel('ACCOUNT'),
               const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A24),
-                  borderRadius: BorderRadius.circular(16),
-                ),
+              _card(
                 child: Column(
                   children: [
                     Row(
@@ -295,14 +248,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         const Text('Balance',
                             style: TextStyle(
-                                color: Color(0xFF8A8A9A), fontSize: 14)),
-                        Text(
-                          '₹${balance.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                              color: Color(0xFFDDDDEE),
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700),
-                        ),
+                                color: AppColors.muted, fontSize: 14)),
+                        Text('₹${balance.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700)),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -311,11 +262,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: OutlinedButton.icon(
                         onPressed: _addPocketMoney,
                         icon: const Icon(Icons.add,
-                            color: Color(0xFF2ECC71), size: 18),
+                            color: AppColors.success, size: 18),
                         label: const Text('Add pocket money',
-                            style: TextStyle(color: Color(0xFF2ECC71))),
+                            style: TextStyle(color: AppColors.success)),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFF2ECC71)),
+                          side: const BorderSide(color: AppColors.success),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -328,79 +279,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 28),
 
-              // ─── Savings ─────────────────────────────────
+              // ─── Savings ──────────────────────────────────
               _sectionLabel('SAVINGS'),
               const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A24),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                      color: const Color(0xFF7C6FFF).withOpacity(0.2)),
-                ),
+              _card(
+                border: Border.all(color: AppColors.primary.withOpacity(0.2)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Total saved since start',
-                            style: TextStyle(
-                                color: Color(0xFF8A8A9A), fontSize: 13)),
-                        Text(
-                          '₹${savings.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                              color: Color(0xFF7C6FFF),
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900),
+                        const Expanded(
+                          child: Text('Total saved since start',
+                              style: TextStyle(
+                                  color: AppColors.muted, fontSize: 13)),
                         ),
+                        Text('₹${savings.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w900)),
                       ],
                     ),
                     const SizedBox(height: 14),
                     GestureDetector(
                       onTap: _resetSavings,
-                      child: const Text(
-                        'Reset to ₹0',
-                        style: TextStyle(
-                            color: Color(0xFFE74C3C),
-                            fontSize: 13,
-                            decoration: TextDecoration.underline,
-                            decorationColor: Color(0xFFE74C3C)),
-                      ),
+                      child: const Text('Reset to ₹0',
+                          style: TextStyle(
+                              color: AppColors.accent,
+                              fontSize: 13,
+                              decoration: TextDecoration.underline,
+                              decorationColor: AppColors.accent)),
                     ),
                   ],
                 ),
               ),
 
-              // ─── Goal progress ────────────────────────────
+              // ─── Goal ─────────────────────────────────────
               if (goalAmount != null && goalDays != null) ...[
                 const SizedBox(height: 28),
                 _sectionLabel('30-DAY GOAL'),
                 const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A24),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                _card(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Day ${dayInGoal ?? 1} of $goalDays',
-                            style: const TextStyle(
-                                color: Color(0xFF8A8A9A), fontSize: 13),
-                          ),
-                          Text(
-                            '₹${_goalSpent.toStringAsFixed(0)} / ₹${goalAmount.toStringAsFixed(0)}',
-                            style: const TextStyle(
-                                color: Color(0xFFDDDDEE),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600),
+                          Text('Day ${dayInGoal ?? 1} of $goalDays',
+                              style: const TextStyle(
+                                  color: AppColors.muted, fontSize: 13)),
+                          Flexible(
+                            child: Text(
+                              '₹${_goalSpent.toStringAsFixed(0)} / ₹${goalAmount.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
@@ -410,11 +349,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: LinearProgressIndicator(
                           value: (_goalSpent / goalAmount).clamp(0, 1),
                           minHeight: 10,
-                          backgroundColor: const Color(0xFF2A2A36),
+                          backgroundColor: AppColors.divider,
                           valueColor: AlwaysStoppedAnimation<Color>(
                             _goalSpent > goalAmount
-                                ? const Color(0xFFE74C3C)
-                                : const Color(0xFF7C6FFF),
+                                ? AppColors.accent
+                                : AppColors.primary,
                           ),
                         ),
                       ),
@@ -425,8 +364,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             : '₹${(goalAmount - _goalSpent).toStringAsFixed(0)} remaining in goal',
                         style: TextStyle(
                           color: _goalSpent > goalAmount
-                              ? const Color(0xFFE74C3C)
-                              : const Color(0xFF5A5A6A),
+                              ? AppColors.accent
+                              : AppColors.muted,
                           fontSize: 12,
                         ),
                       ),
@@ -443,28 +382,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _sectionLabel(String label) {
-    return Text(
-      label,
+  Widget _sectionLabel(String label) => Text(label,
       style: const TextStyle(
-        color: Color(0xFF4A4A5A),
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 2,
-      ),
-    );
-  }
+          color: AppColors.muted,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 2));
 
   Widget _settingRow(String label, String value, VoidCallback onTap,
       {String? subtitle}) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A24),
-          borderRadius: BorderRadius.circular(14),
-        ),
+      child: _card(
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -473,23 +402,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text(label,
                     style: const TextStyle(
-                        color: Color(0xFF8A8A9A), fontSize: 13)),
+                        color: AppColors.muted, fontSize: 13)),
                 if (subtitle != null)
                   Text(subtitle,
                       style: const TextStyle(
-                          color: Color(0xFF4A4A5A), fontSize: 11)),
+                          color: AppColors.muted, fontSize: 11)),
               ],
             ),
             Row(
               children: [
                 Text(value,
                     style: const TextStyle(
-                        color: Color(0xFFDDDDEE),
+                        color: AppColors.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.w600)),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 const Icon(Icons.chevron_right,
-                    color: Color(0xFF4A4A5A), size: 18),
+                    color: AppColors.muted, size: 18),
               ],
             ),
           ],
@@ -498,71 +427,69 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _darkField(TextEditingController ctrl, String hint,
+  Widget _card({required Widget child, Border? border}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: border,
+        boxShadow: [
+          BoxShadow(
+              color: AppColors.primary.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 3))
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _field(TextEditingController ctrl, String hint,
       {TextInputType keyboardType = TextInputType.text}) {
     return TextField(
       controller: ctrl,
       keyboardType: keyboardType,
-      style: const TextStyle(color: Color(0xFFDDDDEE)),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Color(0xFF4A4A5A)),
-        filled: true,
-        fillColor: const Color(0xFF0F0F14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      ),
+      style: const TextStyle(color: AppColors.textPrimary),
+      decoration: InputDecoration(hintText: hint),
     );
   }
 
-  Widget _inputDialog({
+  void _showInputDialog({
     required String title,
     required TextEditingController controller,
     required TextInputType keyboardType,
     required VoidCallback onSave,
     String? hint,
   }) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF1A1A24),
-      title: Text(title,
-          style: const TextStyle(color: Color(0xFFDDDDEE), fontSize: 17)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: controller,
-            keyboardType: keyboardType,
-            autofocus: true,
-            style: const TextStyle(color: Color(0xFFDDDDEE)),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: const TextStyle(color: Color(0xFF4A4A5A)),
-              filled: true,
-              fillColor: const Color(0xFF0F0F14),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text(title,
+            style: const TextStyle(
+                color: AppColors.textPrimary, fontSize: 17)),
+        content: TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          autofocus: true,
+          style: const TextStyle(color: AppColors.textPrimary),
+          decoration: InputDecoration(hintText: hint),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppColors.muted))),
+          TextButton(
+              onPressed: onSave,
+              child: const Text('Save',
+                  style: TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700))),
         ],
       ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(color: Color(0xFF5A5A6A)))),
-        TextButton(
-            onPressed: onSave,
-            child: const Text('Save',
-                style: TextStyle(
-                    color: Color(0xFF7C6FFF),
-                    fontWeight: FontWeight.w700))),
-      ],
     );
   }
 }

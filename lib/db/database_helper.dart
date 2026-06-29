@@ -84,11 +84,16 @@ class DatabaseHelper {
         [amount]);
   }
 
-  Future<void> subtractFromBalance(double amount) async {
+  /// Returns false if balance would go negative; true on success.
+  Future<bool> subtractFromBalance(double amount) async {
     final db = await database;
+    final user = await getUser();
+    final current = (user?['current_balance'] as num?)?.toDouble() ?? 0;
+    if (current - amount < 0) return false;
     await db.rawUpdate(
         'UPDATE users SET current_balance = current_balance - ? WHERE id = 1',
         [amount]);
+    return true;
   }
 
   Future<void> addToSavings(double amount) async {
@@ -104,20 +109,15 @@ class DatabaseHelper {
 
   // ─── DAILY BUDGETS ──────────────────────────────────────
 
-  /// Returns today's date string key (YYYY-MM-DD) using 6 AM cutoff.
   String todayKey() {
     final now = DateTime.now();
-    // Before 6 AM → belongs to previous calendar day
-    final effective = now.hour < 6
-        ? now.subtract(const Duration(days: 1))
-        : now;
+    final effective = now.hour < 6 ? now.subtract(const Duration(days: 1)) : now;
     return effective.toIso8601String().substring(0, 10);
   }
 
   Future<Map<String, dynamic>?> getDailyBudget(String dateKey) async {
     final db = await database;
-    final result = await db.query('daily_budgets',
-        where: 'date = ?', whereArgs: [dateKey]);
+    final result = await db.query('daily_budgets', where: 'date = ?', whereArgs: [dateKey]);
     return result.isEmpty ? null : result.first;
   }
 
@@ -130,7 +130,6 @@ class DatabaseHelper {
     final user = await getUser();
     final baseBudget = (user?['daily_budget'] as num?)?.toDouble() ?? 200.0;
 
-    // Close any unclosed past days first
     await _closePastDays(db, key, baseBudget);
 
     final id = await db.insert('daily_budgets', {
@@ -141,14 +140,11 @@ class DatabaseHelper {
       'is_closed': 0,
     });
 
-    final created = await db.query('daily_budgets',
-        where: 'id = ?', whereArgs: [id]);
+    final created = await db.query('daily_budgets', where: 'id = ?', whereArgs: [id]);
     return created.first;
   }
 
-  Future<void> _closePastDays(
-      Database db, String todayKey, double baseBudget) async {
-    // Find last unclosed day
+  Future<void> _closePastDays(Database db, String todayKey, double baseBudget) async {
     final unclosed = await db.query('daily_budgets',
         where: 'is_closed = 0 AND date < ?',
         whereArgs: [todayKey],
@@ -166,7 +162,6 @@ class DatabaseHelper {
         whereArgs: [day['id']],
       );
 
-      // Add to lifetime savings
       if (saving > 0) await addToSavings(saving);
     }
   }
@@ -196,9 +191,18 @@ class DatabaseHelper {
         orderBy: 'created_at DESC');
   }
 
-  /// All transactions with optional filters.
-  /// [fromDate] and [toDate] are YYYY-MM-DD strings.
-  /// [category] null means all.
+  /// Recent transactions across all days, up to [limit].
+  Future<List<Map<String, dynamic>>> getRecentTransactions({int limit = 10}) async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT t.*, d.date as day_date
+      FROM transactions t
+      JOIN daily_budgets d ON t.daily_budget_id = d.id
+      ORDER BY t.created_at DESC
+      LIMIT $limit
+    ''');
+  }
+
   Future<List<Map<String, dynamic>>> getTransactions({
     String? fromDate,
     String? toDate,
@@ -221,8 +225,7 @@ class DatabaseHelper {
       args.add(category);
     }
 
-    final where =
-    conditions.isNotEmpty ? 'WHERE ${conditions.join(' AND ')}' : '';
+    final where = conditions.isNotEmpty ? 'WHERE ${conditions.join(' AND ')}' : '';
 
     return await db.rawQuery('''
       SELECT t.*, d.date as day_date

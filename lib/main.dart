@@ -5,11 +5,26 @@ import 'screens/home_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/profile_screen.dart';
 
+// ─── Theme colours ────────────────────────────────────────────
+class AppColors {
+  static const bg         = Color(0xFFFFF5F7);
+  static const card       = Color(0xFFFFFFFF);
+  static const primary    = Color(0xFFF28FA3);
+  static const secondary  = Color(0xFFD6C6E7);
+  static const textPrimary   = Color(0xFF1A1F3D);
+  static const textSecondary = Color(0xFF2C335E);
+  static const accent     = Color(0xFFE63946);
+  static const divider    = Color(0xFFF0E4E8);
+  static const inputBg    = Color(0xFFFAEEF2);
+  static const success    = Color(0xFF2ECC71);
+  static const muted      = Color(0xFFB0A8B9);
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
+    statusBarIconBrightness: Brightness.dark,
   ));
   runApp(const HisabKitabApp());
 }
@@ -22,11 +37,32 @@ class HisabKitabApp extends StatelessWidget {
     return MaterialApp(
       title: 'BudgetFlow',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0F0F14),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF7C6FFF),
-          surface: Color(0xFF1A1A24),
+      theme: ThemeData(
+        fontFamily: 'sans-serif',
+        scaffoldBackgroundColor: AppColors.bg,
+        colorScheme: const ColorScheme.light(
+          primary: AppColors.primary,
+          surface: AppColors.card,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: AppColors.inputBg,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          hintStyle: const TextStyle(color: AppColors.muted),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
         ),
       ),
       home: const AppEntry(),
@@ -34,10 +70,9 @@ class HisabKitabApp extends StatelessWidget {
   }
 }
 
-// ─── App entry: checks first launch ──────────────────────────
+// ─── App entry ────────────────────────────────────────────────
 class AppEntry extends StatefulWidget {
   const AppEntry({super.key});
-
   @override
   State<AppEntry> createState() => _AppEntryState();
 }
@@ -64,42 +99,39 @@ class _AppEntryState extends State<AppEntry> {
   Widget build(BuildContext context) {
     if (_checking) {
       return const Scaffold(
-        backgroundColor: Color(0xFF0F0F14),
-        body: Center(
-            child: CircularProgressIndicator(color: Color(0xFF7C6FFF))),
+        backgroundColor: AppColors.bg,
+        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
       );
     }
     return _needsOnboarding ? const OnboardingScreen() : const MainShell();
   }
 }
 
-// ─── Onboarding ──────────────────────────────────────────────
+// ─── Onboarding ───────────────────────────────────────────────
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
-
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final _nameCtrl = TextEditingController();
+  final _nameCtrl    = TextEditingController();
   final _balanceCtrl = TextEditingController();
-  final _budgetCtrl = TextEditingController();
-  final _goalCtrl = TextEditingController();
+  final _budgetCtrl  = TextEditingController();
+  final _goalCtrl    = TextEditingController();
   bool _goalEnabled = false;
   bool _saving = false;
 
   Future<void> _save() async {
-    final name = _nameCtrl.text.trim();
+    final name    = _nameCtrl.text.trim();
     final balance = double.tryParse(_balanceCtrl.text);
-    final budget = double.tryParse(_budgetCtrl.text);
+    final budget  = double.tryParse(_budgetCtrl.text);
 
     if (name.isEmpty || balance == null || budget == null || budget <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please fill all required fields'),
-            backgroundColor: Color(0xFFE74C3C)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please fill all required fields'),
+        backgroundColor: AppColors.accent,
+      ));
       return;
     }
 
@@ -107,11 +139,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (_goalEnabled) {
       goalAmount = double.tryParse(_goalCtrl.text);
       if (goalAmount == null || goalAmount <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Enter a valid goal amount'),
-              backgroundColor: Color(0xFFE74C3C)),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Enter a valid goal amount'),
+          backgroundColor: AppColors.accent,
+        ));
         return;
       }
     }
@@ -126,12 +157,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       'savings': 0.0,
       'goal_amount': goalAmount,
       'goal_days': goalAmount != null ? 30 : null,
-      'goal_start_date':
-      goalAmount != null ? DateTime.now().toIso8601String().substring(0, 10) : null,
+      'goal_start_date': goalAmount != null
+          ? DateTime.now().toIso8601String().substring(0, 10)
+          : null,
       'created_at': DateTime.now().toIso8601String(),
     });
 
-    // Create first daily budget entry
     await DatabaseHelper.instance.getOrCreateToday();
 
     if (mounted) {
@@ -142,125 +173,87 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F14),
+      backgroundColor: AppColors.bg,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
+          padding: EdgeInsets.symmetric(horizontal: w * 0.07, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 40),
-
-              // Logo area
+              const SizedBox(height: 32),
               const Text('💸', style: TextStyle(fontSize: 48)),
-              const SizedBox(height: 16),
-              const Text(
-                'BudgetFlow',
-                style: TextStyle(
-                  color: Color(0xFFDDDDEE),
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -1,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Spend with intention.',
-                style: TextStyle(color: Color(0xFF5A5A6A), fontSize: 15),
-              ),
-
-              const SizedBox(height: 48),
-
+              const SizedBox(height: 12),
+              const Text('BudgetFlow',
+                  style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 30,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -1)),
+              const SizedBox(height: 4),
+              const Text('Spend with intention.',
+                  style: TextStyle(color: AppColors.muted, fontSize: 15)),
+              const SizedBox(height: 40),
               _label('Your name'),
               const SizedBox(height: 8),
-              _field(_nameCtrl, 'Rajanee', keyboardType: TextInputType.name),
-
-              const SizedBox(height: 20),
-
-              _label('Money in your account right now (₹)'),
+              _field(_nameCtrl, 'e.g. Rajanee', keyboardType: TextInputType.name),
+              const SizedBox(height: 18),
+              _label('Current account balance (₹)'),
               const SizedBox(height: 8),
-              _field(_balanceCtrl, '0',
-                  keyboardType: TextInputType.number),
-
-              const SizedBox(height: 20),
-
+              _field(_balanceCtrl, '0', keyboardType: TextInputType.number),
+              const SizedBox(height: 18),
               _label('Daily budget (₹)'),
               const SizedBox(height: 8),
-              _field(_budgetCtrl, '200',
-                  keyboardType: TextInputType.number),
-
-              const SizedBox(height: 28),
-
-              // Goal toggle
-              Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A24),
-                  borderRadius: BorderRadius.circular(14),
-                ),
+              _field(_budgetCtrl, '200', keyboardType: TextInputType.number),
+              const SizedBox(height: 24),
+              _card(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Set a 30-day goal?',
-                            style: TextStyle(
-                                color: Color(0xFFDDDDEE), fontSize: 15)),
-                        Text('Track total spending for a month',
-                            style: TextStyle(
-                                color: Color(0xFF4A4A5A), fontSize: 12)),
-                      ],
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Set a 30-day spending goal?',
+                              style: TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600)),
+                          SizedBox(height: 2),
+                          Text('Track total spending for a month',
+                              style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                        ],
+                      ),
                     ),
                     Switch(
                       value: _goalEnabled,
                       onChanged: (v) => setState(() => _goalEnabled = v),
-                      activeColor: const Color(0xFF7C6FFF),
+                      activeColor: AppColors.primary,
                     ),
                   ],
                 ),
               ),
-
               if (_goalEnabled) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 _label('Total goal amount (₹)'),
                 const SizedBox(height: 8),
-                _field(_goalCtrl, 'e.g. 6000',
-                    keyboardType: TextInputType.number),
+                _field(_goalCtrl, 'e.g. 6000', keyboardType: TextInputType.number),
               ],
-
-              const SizedBox(height: 40),
-
+              const SizedBox(height: 36),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _saving ? null : _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF7C6FFF),
-                    disabledBackgroundColor:
-                    const Color(0xFF7C6FFF).withOpacity(0.5),
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
-                  ),
                   child: _saving
                       ? const SizedBox(
-                      height: 20,
-                      width: 20,
+                      height: 20, width: 20,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
-                      : const Text(
-                    'Continue →',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700),
-                  ),
+                      : const Text('Continue →'),
                 ),
               ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -268,39 +261,48 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _label(String text) {
-    return Text(text,
-        style: const TextStyle(color: Color(0xFF8A8A9A), fontSize: 13));
-  }
+  Widget _label(String text) => Text(text,
+      style: const TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 13,
+          fontWeight: FontWeight.w600));
 
   Widget _field(TextEditingController ctrl, String hint,
       {TextInputType keyboardType = TextInputType.text}) {
     return TextField(
       controller: ctrl,
       keyboardType: keyboardType,
-      style: const TextStyle(color: Color(0xFFDDDDEE), fontSize: 16),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Color(0xFF3A3A4A)),
-        filled: true,
-        fillColor: const Color(0xFF1A1A24),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      ),
+      style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+      decoration: InputDecoration(hintText: hint),
     );
   }
+
+  Widget _card({required Widget child}) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    decoration: BoxDecoration(
+      color: AppColors.card,
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [
+        BoxShadow(
+            color: AppColors.primary.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 3))
+      ],
+    ),
+    child: child,
+  );
 }
 
-// ─── Main shell with bottom nav ───────────────────────────────
+// ─── Main shell ───────────────────────────────────────────────
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
-
   @override
   State<MainShell> createState() => _MainShellState();
+
+  /// Call from any descendant widget to switch the bottom tab.
+  static void switchTab(BuildContext context, int index) {
+    context.findAncestorStateOfType<_MainShellState>()?.switchTab(index);
+  }
 }
 
 class _MainShellState extends State<MainShell> {
@@ -308,55 +310,51 @@ class _MainShellState extends State<MainShell> {
 
   void switchTab(int index) => setState(() => _tab = index);
 
-  // Allow HomeScreen to jump to history
-  static _MainShellState? of(BuildContext context) {
-    return context.findAncestorStateOfType<_MainShellState>();
-  }
-
   @override
   Widget build(BuildContext context) {
-    const screens = [
-      HistoryScreen(),
-      HomeScreen(),
-      ProfileScreen(),
+    final screens = [
+      const HistoryScreen(),
+      const HomeScreen(),
+      const ProfileScreen(),
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F14),
-      body: IndexedStack(
-        index: _tab,
-        children: screens,
-      ),
+      backgroundColor: AppColors.bg,
+      body: IndexedStack(index: _tab, children: screens),
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Color(0xFF1E1E2A), width: 1)),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _tab,
-          onTap: (i) => setState(() => _tab = i),
-          backgroundColor: const Color(0xFF0F0F14),
-          selectedItemColor: const Color(0xFF7C6FFF),
-          unselectedItemColor: const Color(0xFF3A3A4A),
-          type: BottomNavigationBarType.fixed,
-          showSelectedLabels: true,
-          showUnselectedLabels: true,
-          selectedLabelStyle: const TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w600),
-          unselectedLabelStyle: const TextStyle(fontSize: 11),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.history_rounded),
-              label: 'History',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_rounded),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_rounded),
-              label: 'Profile',
-            ),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          boxShadow: [
+            BoxShadow(
+                color: AppColors.primary.withOpacity(0.10),
+                blurRadius: 16,
+                offset: const Offset(0, -4))
           ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: BottomNavigationBar(
+            currentIndex: _tab,
+            onTap: (i) => setState(() => _tab = i),
+            backgroundColor: AppColors.card,
+            selectedItemColor: AppColors.primary,
+            unselectedItemColor: AppColors.muted,
+            type: BottomNavigationBarType.fixed,
+            elevation: 0,
+            showSelectedLabels: true,
+            showUnselectedLabels: true,
+            selectedLabelStyle:
+            const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            unselectedLabelStyle: const TextStyle(fontSize: 11),
+            items: const [
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.history_rounded), label: 'History'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.home_rounded), label: 'Home'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.person_rounded), label: 'Profile'),
+            ],
+          ),
         ),
       ),
     );

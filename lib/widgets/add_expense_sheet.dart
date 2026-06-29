@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../db/database_helper.dart';
+import '../main.dart';
 
 class AddExpenseSheet extends StatefulWidget {
   final VoidCallback onSaved;
@@ -16,264 +17,188 @@ class AddExpenseSheet extends StatefulWidget {
 }
 
 class _AddExpenseSheetState extends State<AddExpenseSheet> {
-  final db = DatabaseHelper.instance;
-  final _amountCtrl = TextEditingController();
-  final _noteCtrl = TextEditingController();
-  String _selectedCategory = 'Food';
-  bool _saving = false;
+  final db         = DatabaseHelper.instance;
+  final _amtCtrl   = TextEditingController();
+  final _noteCtrl  = TextEditingController();
+
+  String _category = 'Food';
+  bool _saving     = false;
 
   final _categories = [
-    ('Food', '🍕'),
-    ('Transport', '🚌'),
-    ('Grocery', '🛒'),
-    ('Entertainment', '🎬'),
-    ('Other', '📦'),
-    ('Big Purchase', '👗'),
+    'Food', 'Transport', 'Grocery',
+    'Entertainment', 'Other', 'Big Purchase',
   ];
 
-  bool get _isBigPurchase => _selectedCategory == 'Big Purchase';
+  final _emojis = {
+    'Food': '🍕', 'Transport': '🚌', 'Grocery': '🛒',
+    'Entertainment': '🎬', 'Other': '📦', 'Big Purchase': '👗',
+  };
 
   Future<void> _save() async {
-    final amount = double.tryParse(_amountCtrl.text);
-    if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Enter a valid amount'),
-            backgroundColor: Color(0xFFE74C3C)),
-      );
-      return;
-    }
+    final amount = double.tryParse(_amtCtrl.text);
+    if (amount == null || amount <= 0) return;
+    final note = _noteCtrl.text.trim().isEmpty ? _category : _noteCtrl.text.trim();
 
     setState(() => _saving = true);
 
-    final note = _noteCtrl.text.trim().isEmpty
-        ? _selectedCategory  // fallback to category name
-        : _noteCtrl.text.trim();
+    // Balance guard
+    final ok = await db.subtractFromBalance(amount);
+    if (!ok) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Insufficient balance'),
+            backgroundColor: AppColors.accent,
+          ),
+        );
+      }
+      return;
+    }
 
-    final now = DateTime.now();
+    final isBig = _category == 'Big Purchase';
 
-    // Insert transaction
     await db.insertTransaction({
       'daily_budget_id': widget.todayEntry['id'],
       'type': 'expense',
       'amount': amount,
-      'category': _selectedCategory,
+      'category': _category,
       'note': note,
-      'created_at': now.toIso8601String(),
+      'created_at': DateTime.now().toIso8601String(),
     });
 
-    // Only deduct from daily spent if NOT a big purchase
-    if (!_isBigPurchase) {
-      await db.updateDailySpent(widget.todayEntry['date'], amount);
+    // Big purchases don't count against daily budget
+    if (!isBig) {
+      await db.updateDailySpent(
+          widget.todayEntry['date'] as String, amount);
     }
 
-    // Always deduct from account balance
-    await db.subtractFromBalance(amount);
-
-    Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
     widget.onSaved();
   }
 
   @override
   Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+
     return Padding(
-      padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
         decoration: const BoxDecoration(
-          color: Color(0xFF1A1A24),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          color: AppColors.card,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Drag handle
+            // Handle
             Center(
               child: Container(
-                width: 40,
-                height: 4,
+                width: 40, height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A36),
+                  color: AppColors.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
+            const SizedBox(height: 18),
+
+            const Text('Add Expense',
+                style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700)),
             const SizedBox(height: 20),
 
-            const Text(
-              'How much did you spend?',
-              style: TextStyle(
-                color: Color(0xFF8A8A9A),
-                fontSize: 13,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // Amount input
+            // Amount
             TextField(
-              controller: _amountCtrl,
-              keyboardType:
-              const TextInputType.numberWithOptions(decimal: true),
-              autofocus: true,
+              controller: _amtCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(
-                color: Color(0xFFDDDDEE),
-                fontSize: 36,
-                fontWeight: FontWeight.w800,
-              ),
-              decoration: InputDecoration(
-                prefixText: '₹  ',
-                prefixStyle: const TextStyle(
-                  color: Color(0xFF5A5A6A),
+                  color: AppColors.textPrimary,
                   fontSize: 28,
-                  fontWeight: FontWeight.w300,
-                ),
+                  fontWeight: FontWeight.w800),
+              decoration: const InputDecoration(
+                prefixText: '₹  ',
+                prefixStyle: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700),
                 hintText: '0',
-                hintStyle: const TextStyle(
-                    color: Color(0xFF2A2A36), fontSize: 36),
-                filled: true,
-                fillColor: const Color(0xFF0F0F14),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 18),
+                hintStyle: TextStyle(color: AppColors.muted, fontSize: 28),
               ),
+              autofocus: true,
             ),
+            const SizedBox(height: 14),
 
-            const SizedBox(height: 22),
-
-            const Text(
-              'Category',
-              style: TextStyle(color: Color(0xFF8A8A9A), fontSize: 13),
+            // Note
+            TextField(
+              controller: _noteCtrl,
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+              decoration: const InputDecoration(hintText: 'Note (optional)'),
             ),
+            const SizedBox(height: 18),
+
+            // Category chips
+            const Text('Category',
+                style: TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1)),
             const SizedBox(height: 10),
-
-            // Category chips — wrap layout
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _categories.map((pair) {
-                final name = pair.$1;
-                final emoji = pair.$2;
-                final selected = _selectedCategory == name;
-                final isBig = name == 'Big Purchase';
-
+              children: _categories.map((cat) {
+                final selected = cat == _category;
                 return GestureDetector(
-                  onTap: () => setState(() => _selectedCategory = name),
+                  onTap: () => setState(() => _category = cat),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
+                    duration: const Duration(milliseconds: 160),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 9),
+                        horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: selected
-                          ? (isBig
-                          ? const Color(0xFFFF6B9D).withOpacity(0.15)
-                          : const Color(0xFF7C6FFF).withOpacity(0.15))
-                          : const Color(0xFF0F0F14),
-                      borderRadius: BorderRadius.circular(12),
+                          ? AppColors.primary
+                          : AppColors.inputBg,
+                      borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: selected
-                            ? (isBig
-                            ? const Color(0xFFFF6B9D)
-                            : const Color(0xFF7C6FFF))
-                            : const Color(0xFF2A2A36),
+                            ? AppColors.primary
+                            : AppColors.divider,
                       ),
                     ),
                     child: Text(
-                      '$emoji $name',
+                      '${_emojis[cat]} $cat',
                       style: TextStyle(
-                        color: selected
-                            ? (isBig
-                            ? const Color(0xFFFF6B9D)
-                            : const Color(0xFF7C6FFF))
-                            : const Color(0xFF6A6A7A),
-                        fontSize: 13,
-                        fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                      ),
+                          color: selected
+                              ? Colors.white
+                              : AppColors.textSecondary,
+                          fontSize: 13,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w400),
                     ),
                   ),
                 );
               }).toList(),
             ),
 
-            // Big purchase note
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: _isBigPurchase
-                  ? const Padding(
-                padding: EdgeInsets.only(top: 10),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline,
-                        color: Color(0xFFFF6B9D), size: 14),
-                    SizedBox(width: 6),
-                    Text(
-                      "Won't count against your daily ₹200",
-                      style: TextStyle(
-                          color: Color(0xFFFF6B9D), fontSize: 12),
-                    ),
-                  ],
-                ),
-              )
-                  : const SizedBox.shrink(),
-            ),
-
-            const SizedBox(height: 18),
-
-            // Note field
-            TextField(
-              controller: _noteCtrl,
-              style: const TextStyle(color: Color(0xFFDDDDEE), fontSize: 15),
-              decoration: InputDecoration(
-                hintText:
-                'Note (optional) — defaults to "$_selectedCategory"',
-                hintStyle:
-                const TextStyle(color: Color(0xFF3A3A4A), fontSize: 13),
-                filled: true,
-                fillColor: const Color(0xFF0F0F14),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14),
-              ),
-            ),
-
-            const SizedBox(height: 22),
+            const SizedBox(height: 24),
 
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _saving ? null : _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C6FFF),
-                  disabledBackgroundColor:
-                  const Color(0xFF7C6FFF).withOpacity(0.4),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                  elevation: 0,
-                ),
                 child: _saving
                     ? const SizedBox(
-                    height: 20,
-                    width: 20,
+                    height: 20, width: 20,
                     child: CircularProgressIndicator(
                         color: Colors.white, strokeWidth: 2))
-                    : const Text(
-                  'Save Expense',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700),
-                ),
+                    : const Text('Save expense'),
               ),
             ),
           ],
